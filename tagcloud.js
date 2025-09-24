@@ -7,45 +7,45 @@ const map = new AMap.Map("mapContainer", {
 // Paper.js 画布初始化
 paper.setup("paperCanvas");
 
-// 画布平移缩放交互
-let isDragging = false;
-let lastPoint = null;
-let lastCenter = null;
-if (paper.view.element) {
-  paper.view.element.addEventListener(
-    "wheel",
-    function (e) {
-      e.preventDefault();
-      const oldZoom = paper.view.zoom;
-      const delta = e.deltaY < 0 ? 1.1 : 0.9;
-      // 鼠标位置为缩放中心
-      const mousePos = new paper.Point(e.offsetX, e.offsetY);
-      const viewPos = paper.view.viewToProject(mousePos);
-      paper.view.zoom = Math.max(0.2, Math.min(10, oldZoom * delta));
-      // 缩放后保持鼠标点位置不变
-      const newViewPos = paper.view.viewToProject(mousePos);
-      const offset = newViewPos.subtract(viewPos);
-      paper.view.center = paper.view.center.subtract(offset);
-      paper.view.draw();
-    },
-    { passive: false }
-  );
-}
-paper.view.onMouseDown = function (event) {
-  isDragging = true;
-  lastPoint = event.point;
-  lastCenter = paper.view.center;
-};
-paper.view.onMouseDrag = function (event) {
-  if (!isDragging || !lastPoint || !lastCenter) return;
-  paper.view.center = lastCenter.subtract(event.point.subtract(lastPoint));
-  paper.view.draw();
-};
-paper.view.onMouseUp = function (event) {
-  isDragging = false;
-  lastPoint = null;
-  lastCenter = null;
-};
+// // 画布平移缩放交互
+// let isDragging = false;
+// let lastPoint = null;
+// let lastCenter = null;
+// if (paper.view.element) {
+//   paper.view.element.addEventListener(
+//     "wheel",
+//     function (e) {
+//       e.preventDefault();
+//       const oldZoom = paper.view.zoom;
+//       const delta = e.deltaY < 0 ? 1.1 : 0.9;
+//       // 鼠标位置为缩放中心
+//       const mousePos = new paper.Point(e.offsetX, e.offsetY);
+//       const viewPos = paper.view.viewToProject(mousePos);
+//       paper.view.zoom = Math.max(0.2, Math.min(10, oldZoom * delta));
+//       // 缩放后保持鼠标点位置不变
+//       const newViewPos = paper.view.viewToProject(mousePos);
+//       const offset = newViewPos.subtract(viewPos);
+//       paper.view.center = paper.view.center.subtract(offset);
+//       paper.view.draw();
+//     },
+//     { passive: false }
+//   );
+// }
+// paper.view.onMouseDown = function (event) {
+//   isDragging = true;
+//   lastPoint = event.point;
+//   lastCenter = paper.view.center;
+// };
+// paper.view.onMouseDrag = function (event) {
+//   if (!isDragging || !lastPoint || !lastCenter) return;
+//   paper.view.center = lastCenter.subtract(event.point.subtract(lastPoint));
+//   paper.view.draw();
+// };
+// paper.view.onMouseUp = function (event) {
+//   isDragging = false;
+//   lastPoint = null;
+//   lastCenter = null;
+// };
 
 // 同步画布到地图bbox并在中心生成标签
 document.getElementById("syncBboxBtn").addEventListener("click", function () {
@@ -83,11 +83,15 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
       // 画布中心经纬（用于点到画布坐标转换）
       var centerLng = center.getLng();
       var centerLat = center.getLat();
+      // 替换为：把经纬度映射到 canvas 的视图坐标（相对于 canvas 左上角），再转换为 Paper 项目坐标
       function lnglat2xy(lng, lat) {
-        var x = ((lng - minLng) / (maxLng - minLng)) * canvas.width;
-        var y =
-          canvas.height - ((lat - minLat) / (maxLat - minLat)) * canvas.height;
-        return { x, y };
+        // 使用 canvas 的实际显示尺寸（CSS 像素）映射经纬到视图坐标
+        var rect = canvas.getBoundingClientRect();
+        var vx = ((lng - minLng) / (maxLng - minLng)) * rect.width;
+        var vy = rect.height - ((lat - minLat) / (maxLat - minLat)) * rect.height;
+        // 将视图坐标转换为 Paper.js 的 project 坐标，保证与 Paper 中绘制一致（考虑 view 的 center/zoom）
+        var proj = paper.view.viewToProject(new paper.Point(vx, vy));
+        return { x: proj.x, y: proj.y };
       }
       var centerXY = lnglat2xy(centerLng, centerLat);
       // 清除旧点标签
@@ -141,14 +145,14 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
         var Ri =
           rmax === rmin ? 0 : ((tag.r - rmin) / (rmax - rmin)) * h * 0.25;
         var maxRadius = h * 0.25;
-        var step = 20;
+        var step = 10;
         var centerX = centerPointView.x,
           centerY = centerPointView.y;
         var baseX = centerX + Ri * Math.cos(tag.phi);
         var baseY = centerY + Ri * Math.sin(tag.phi);
 
         // 多角度尝试
-        var angles = [-15, -10, -5, 0, 5, 10, 15];
+        var angles = [-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10];
         var found = false,
           pt;
         for (
@@ -232,10 +236,11 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
       var maxLat = ne.getLat();
       var canvas = document.getElementById("paperCanvas");
       function lnglat2xy(lng, lat) {
-        var x = ((lng - minLng) / (maxLng - minLng)) * canvas.width;
-        var y =
-          canvas.height - ((lat - minLat) / (maxLat - minLat)) * canvas.height;
-        return { x, y };
+        var rect = canvas.getBoundingClientRect();
+        var vx = ((lng - minLng) / (maxLng - minLng)) * rect.width;
+        var vy = rect.height - ((lat - minLat) / (maxLat - minLat)) * rect.height;
+        var proj = paper.view.viewToProject(new paper.Point(vx, vy));
+        return { x: proj.x, y: proj.y };
       }
       // 清除旧线条
       if (window._linePaths) window._linePaths.forEach((p) => p.remove());
@@ -305,7 +310,7 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
       // --- 替换：把点投影到矩形边界并沿矩形周长替换连续投影段 ---
       function projectPointToRectBoundary(pt, r, gap) {
         gap = gap || 0;
-        // clamp to rectangle
+        // 将点限制到矩形内
         var cx = Math.max(r.x, Math.min(r.x + r.w, pt.x));
         var cy = Math.max(r.y, Math.min(r.y + r.h, pt.y));
         var onLeft = Math.abs(cx - r.x) < 1e-8;
@@ -326,7 +331,7 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
           out.side = "right";
           out.x = r.x + r.w + gap;
         } else {
-          // corner or interior: determine closest edge by distance
+          // 角点或内部：根据距离选择最近的边
           var dl = Math.abs(pt.x - r.x),
             dr = Math.abs(pt.x - (r.x + r.w));
           var dt = Math.abs(pt.y - r.y),
@@ -353,28 +358,24 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
         return out;
       }
 
-      function perimeterLength(r) {
-        return 2 * (r.w + r.h);
-      }
-
       // 以 c0 (top-left) 为起点，顺时针计算点在周长上的长度值
       function lengthAlongPerimeterFromC0(p, r) {
         var w = r.w,
           h = r.h;
-        // assume p is on boundary (x in [r.x,r.x+w], y in [r.y,r.y+h]) possibly offset by gap -- clamp projection to exact edge
+        // 假设 p 在边界上（可能已被 gap 偏移），将坐标约束到边界以计算在周长上的位置
         var x = Math.max(r.x, Math.min(r.x + r.w, p.x));
         var y = Math.max(r.y, Math.min(r.y + r.h, p.y));
         if (Math.abs(y - r.y) < 1e-6) {
-          // top edge
+          // top 边
           return x - r.x;
         } else if (Math.abs(x - (r.x + r.w)) < 1e-6) {
-          // right edge
+          // right 边
           return w + (y - r.y);
         } else if (Math.abs(y - (r.y + r.h)) < 1e-6) {
-          // bottom edge (go from top-right to bottom-right to bottom-left)
+          // bottom 边（从 top-right 顺时针到 bottom-left）
           return w + h + (r.x + r.w - x);
         } else {
-          // left edge
+          // left 边
           return 2 * w + h + (r.y + r.h - y);
         }
       }
@@ -393,13 +394,14 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
         ) {
           return false;
         }
+        // 通过包围盒快速排除（仍可能是共线边接触，但可接受）
         if (
           Math.max(a1.x, a2.x) < Math.min(b1.x, b2.x) ||
           Math.max(b1.x, b2.x) < Math.min(a1.x, a2.x) ||
           Math.max(a1.y, a2.y) < Math.min(b1.y, b2.y) ||
           Math.max(b1.y, b2.y) < Math.min(a1.y, a2.y)
         ) {
-          // bbox reject - still could be collinear edge touching, but acceptable
+          // 包围盒排除
         }
         var c1 = cross(a1, a2, b1);
         var c2 = cross(a1, a2, b2);
@@ -417,7 +419,7 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
           for (var j = 0; j < outPts.length - 1; j++) {
             var b1 = outPts[j],
               b2 = outPts[j + 1];
-            // skip adjacent connections (allow touching at join)
+            // 跳过相邻线段（允许在连接点处接触）
             if (
               (Math.abs(a1.x - b1.x) < 1e-8 && Math.abs(a1.y - b1.y) < 1e-8) ||
               (Math.abs(a1.x - b2.x) < 1e-8 && Math.abs(a1.y - b2.y) < 1e-8) ||
@@ -430,6 +432,11 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
           }
         }
         return false;
+      }
+
+      // 补充：矩形周长计算（供 buildBoundaryPathsBetween 使用）
+      function perimeterLength(r) {
+        return 2 * (r.w + r.h);
       }
 
       // ----- 修改：buildBoundaryPathBetween 返回两条候选路径（cw/ccw）-----
@@ -543,60 +550,60 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
           while (j + 1 < infos.length && infos[j + 1].rectIdx === ri) j++;
           var pA = infos[i].proj;
           var pB = infos[j].proj;
-          // get both candidate paths
+          // 获取两个候选路径
           var candPaths = buildBoundaryPathsBetween(rects[ri], pA, pB);
-          // choose candidate not intersecting current out (prefer shorter)
-          var choose = null;
-          var cw = candPaths.cw,
-            ccw = candPaths.ccw;
-          var len = function (arr) {
-            var L = 0;
-            for (var z = 0; z < arr.length - 1; z++) {
-              L += Math.hypot(arr[z + 1].x - arr[z].x, arr[z + 1].y - arr[z].y);
-            }
-            return L;
-          };
-          var cwLen = len(cw),
-            ccwLen = len(ccw);
-          var cwInter = pathIntersectsAny(cw, out);
-          var ccwInter = pathIntersectsAny(ccw, out);
-          if (!cwInter && !ccwInter) {
-            choose = cwLen <= ccwLen ? cw : ccw;
-          } else if (!cwInter) {
-            choose = cw;
-          } else if (!ccwInter) {
-            choose = ccw;
-          } else {
-            // both intersect, fallback to simple projection endpoints to avoid adding crossing
-            choose = [
-              { x: pA.x, y: pA.y },
-              { x: pB.x, y: pB.y },
-            ];
-          }
+          // 从候选路径中选择与当前 out 不相交的（优先较短路径）
+           var choose = null;
+           var cw = candPaths.cw,
+             ccw = candPaths.ccw;
+           var len = function (arr) {
+             var L = 0;
+             for (var z = 0; z < arr.length - 1; z++) {
+               L += Math.hypot(arr[z + 1].x - arr[z].x, arr[z + 1].y - arr[z].y);
+             }
+             return L;
+           };
+           var cwLen = len(cw),
+             ccwLen = len(ccw);
+           var cwInter = pathIntersectsAny(cw, out);
+           var ccwInter = pathIntersectsAny(ccw, out);
+           if (!cwInter && !ccwInter) {
+             choose = cwLen <= ccwLen ? cw : ccw;
+           } else if (!cwInter) {
+             choose = cw;
+           } else if (!ccwInter) {
+             choose = ccw;
+           } else {
+            // 双方均相交，退化为仅使用投影端点以避免引入交叉
+             choose = [
+               { x: pA.x, y: pA.y },
+               { x: pB.x, y: pB.y },
+             ];
+           }
 
-          // append choose to out (avoid duplicate point)
-          if (out.length > 0) {
-            var last = out[out.length - 1];
-            if (
-              Math.abs(last.x - choose[0].x) < 1e-6 &&
-              Math.abs(last.y - choose[0].y) < 1e-6
-            ) {
-              for (var k = 1; k < choose.length; k++) out.push(choose[k]);
-            } else {
-              for (var k = 0; k < choose.length; k++) out.push(choose[k]);
-            }
-          } else {
-            for (var k = 0; k < choose.length; k++) out.push(choose[k]);
-          }
-          i = j + 1;
-        }
-        // endpoints preservation
-        if (sampled.length > 0) {
-          out[0] = sampled[0];
-          out[out.length - 1] = sampled[sampled.length - 1];
-        }
-        return out;
-      }
+          // 将选择的路径追加到 out（避免重复点）
+           if (out.length > 0) {
+             var last = out[out.length - 1];
+             if (
+               Math.abs(last.x - choose[0].x) < 1e-6 &&
+               Math.abs(last.y - choose[0].y) < 1e-6
+             ) {
+               for (var k = 1; k < choose.length; k++) out.push(choose[k]);
+             } else {
+               for (var k = 0; k < choose.length; k++) out.push(choose[k]);
+             }
+           } else {
+             for (var k = 0; k < choose.length; k++) out.push(choose[k]);
+           }
+           i = j + 1;
+         }
+        // 保留端点
+         if (sampled.length > 0) {
+           out[0] = sampled[0];
+           out[out.length - 1] = sampled[sampled.length - 1];
+         }
+         return out;
+       }
 
       // 插入：按像素步长采样折线为点序列
       function sampleLine(coords, sampleStep) {
@@ -688,6 +695,40 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
         return out;
       }
 
+      // 新增：角度驱动的锐角平滑
+      // points: [{x,y},...]，angleDeg: 阈值(度)，iterations: 迭代次数，alpha: 方向移动比例(0..1)
+      function smoothAcuteCorners(points, angleDeg, iterations, alpha) {
+        if (!points || points.length < 3) return points ? points.slice() : [];
+        var thr = (angleDeg || 90) * Math.PI / 180;
+        iterations = Math.max(0, iterations || 1);
+        alpha = Math.max(0, Math.min(1, typeof alpha === "number" ? alpha : 0.6));
+        var pts = points.map(function(p){ return { x: p.x, y: p.y }; });
+        for (var it = 0; it < iterations; it++) {
+          var changed = false;
+          var next = pts.map(function(p){ return { x: p.x, y: p.y }; });
+          for (var i = 1; i < pts.length - 1; i++) {
+            var a = pts[i - 1], b = pts[i], c = pts[i + 1];
+            var v1x = b.x - a.x, v1y = b.y - a.y;
+            var v2x = c.x - b.x, v2y = c.y - b.y;
+            var n1 = Math.hypot(v1x, v1y), n2 = Math.hypot(v2x, v2y);
+            if (n1 < 1e-6 || n2 < 1e-6) continue;
+            var dot = (v1x * v2x + v1y * v2y) / (n1 * n2);
+            dot = Math.max(-1, Math.min(1, dot));
+            var ang = Math.acos(dot);
+            if (ang < thr) {
+              // 把当前点往邻点中点移动，alpha 越大移动越多
+              var mx = (a.x + c.x) / 2, my = (a.y + c.y) / 2;
+              next[i].x = b.x * (1 - alpha) + mx * alpha;
+              next[i].y = b.y * (1 - alpha) + my * alpha;
+              changed = true;
+            }
+          }
+          pts = next;
+          if (!changed) break;
+        }
+        return pts;
+      }
+
       // ====== 新增：主处理循环（必须在 chaikinSmooth、routeSampledAlongBoundaries、sampleLine 等函数之后） ======
       var sampleStepPx = 6;
       // 确保 window._linePaths 已初始化
@@ -702,8 +743,12 @@ document.getElementById("syncBboxBtn").addEventListener("click", function () {
           // 自适应容差：根据画布尺寸和采样步长设定，避免过度或不足简化
           var tol = Math.max(0.5, Math.min(6, sampleStepPx * 0.8));
           var simplified = simplifyDouglasPeucker(routed, tol);
-          // 轻量平滑
+          // 初步平滑
           var sm = chaikinSmooth(simplified, 1);
+          // 针对小于阈值的锐角再做角度平滑（减少 <30° 的折点）
+          sm = smoothAcuteCorners(sm, 30, 2, 0.6);
+          // 最后再平滑一次以确保曲线自然
+          sm = chaikinSmooth(sm, 1);
           if (sm && sm.length > 1) {
             var path = new paper.Path({ strokeColor: "blue", strokeWidth: strokeWidth });
             sm.forEach(function (p) { path.add(new paper.Point(p.x, p.y)); });
